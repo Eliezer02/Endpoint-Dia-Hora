@@ -2,32 +2,39 @@ const axios = require('axios');
 
 module.exports = async (req, res) => {
     try {
-        // 1. Chama a API pública (WorldTimeAPI)
+        // 1. Chama a API pública
         const response = await axios.get('http://worldtimeapi.org/api/timezone/America/Sao_Paulo');
         const data = response.data;
 
-        // 2. Configurações de exibição
-        const diasSemana = ['Domingo', 'Segunda-feira', 'Terça-feira', 'Quarta-feira', 'Quinta-feira', 'Sexta-feira', 'Sábado'];
-        
-        // Cria objeto de data
+        // 2. Cria objeto de data
         const dataObj = new Date(data.datetime);
-        
-        // Formata Hora (ex: 14:30)
+
+        // --- CORREÇÃO AQUI ---
+        // Forçamos o javascript a nos dar a hora (0-23) no fuso de SP, não do Servidor UTC
+        const horaBrasilString = dataObj.toLocaleString("pt-BR", {
+            timeZone: "America/Sao_Paulo",
+            hour: "numeric",
+            hour12: false
+        });
+        const horaAtual = parseInt(horaBrasilString);
+        // ---------------------
+
+        // Formatações visuais (já estavam certas)
+        const diasSemana = ['Domingo', 'Segunda-feira', 'Terça-feira', 'Quarta-feira', 'Quinta-feira', 'Sexta-feira', 'Sábado'];
         const horaFormatada = dataObj.toLocaleTimeString('pt-BR', { 
             hour: '2-digit', 
             minute: '2-digit',
             timeZone: 'America/Sao_Paulo'
         });
-
-        // Formata Data (ex: 04/12/2025)
         const dataFormatada = dataObj.toLocaleDateString('pt-BR', {
             timeZone: 'America/Sao_Paulo'
         });
-
         const diaSemanaNome = diasSemana[data.day_of_week];
-        const horaAtual = dataObj.getHours(); 
 
-        // 3. Lógica Granatto: Seg-Sex (09-18), Sáb (09-13)
+        // 3. Lógica Granatto
+        // Seg-Sex (09:00 - 17:59) -> ABERTO
+        // Sáb (09:00 - 12:59) -> ABERTO
+        
         let statusLoja = "FECHADO";
         
         if (data.day_of_week >= 1 && data.day_of_week <= 5) { // Seg a Sex
@@ -40,12 +47,14 @@ module.exports = async (req, res) => {
             }
         }
 
-        // 4. Retorna a resposta (Status 200 = Sucesso)
+        // 4. Retorno
         res.status(200).json({
             data: dataFormatada,
             hora: horaFormatada,
             dia_semana: diaSemanaNome,
             status_comercial: statusLoja,
+            hora_servidor_debug: dataObj.getHours(), // Só para você ver a diferença se quiser
+            hora_brasil_debug: horaAtual,
             fuso: "America/Sao_Paulo"
         });
 
