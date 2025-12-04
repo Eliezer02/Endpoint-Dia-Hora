@@ -1,65 +1,74 @@
-const axios = require('axios');
-
-module.exports = async (req, res) => {
+module.exports = (req, res) => {
     try {
-        // 1. Chama a API pública
-        const response = await axios.get('http://worldtimeapi.org/api/timezone/America/Sao_Paulo');
-        const data = response.data;
+        // Define o fuso horário desejado
+        const timeZone = 'America/Sao_Paulo';
+        
+        // Pega a data/hora atual (UTC)
+        const now = new Date();
 
-        // 2. Cria objeto de data
-        const dataObj = new Date(data.datetime);
+        // 1. Obter a HORA pura no Brasil (0-23) para a lógica
+        const horaBrasil = parseInt(new Intl.DateTimeFormat('pt-BR', {
+            hour: 'numeric',
+            hour12: false,
+            timeZone
+        }).format(now));
 
-        // --- CORREÇÃO AQUI ---
-        // Forçamos o javascript a nos dar a hora (0-23) no fuso de SP, não do Servidor UTC
-        const horaBrasilString = dataObj.toLocaleString("pt-BR", {
-            timeZone: "America/Sao_Paulo",
-            hour: "numeric",
-            hour12: false
-        });
-        const horaAtual = parseInt(horaBrasilString);
-        // ---------------------
+        // 2. Obter o DIA DA SEMANA numérico no Brasil para a lógica (0=Dom, 1=Seg... 6=Sáb)
+        // Precisamos criar uma data "fake" baseada na string brasileira para o .getDay() funcionar no fuso certo
+        const dataStringBrasil = new Date().toLocaleString("en-US", { timeZone });
+        const dataObjBrasil = new Date(dataStringBrasil);
+        const diaSemanaIndex = dataObjBrasil.getDay(); 
 
-        // Formatações visuais (já estavam certas)
-        const diasSemana = ['Domingo', 'Segunda-feira', 'Terça-feira', 'Quarta-feira', 'Quinta-feira', 'Sexta-feira', 'Sábado'];
-        const horaFormatada = dataObj.toLocaleTimeString('pt-BR', { 
-            hour: '2-digit', 
-            minute: '2-digit',
-            timeZone: 'America/Sao_Paulo'
-        });
-        const dataFormatada = dataObj.toLocaleDateString('pt-BR', {
-            timeZone: 'America/Sao_Paulo'
-        });
-        const diaSemanaNome = diasSemana[data.day_of_week];
+        // 3. Formatadores para exibição bonita (JSON)
+        const dataFormatada = new Intl.DateTimeFormat('pt-BR', { 
+            timeZone, day: '2-digit', month: '2-digit', year: 'numeric' 
+        }).format(now);
 
-        // 3. Lógica Granatto
-        // Seg-Sex (09:00 - 17:59) -> ABERTO
-        // Sáb (09:00 - 12:59) -> ABERTO
+        const horaFormatada = new Intl.DateTimeFormat('pt-BR', { 
+            timeZone, hour: '2-digit', minute: '2-digit' 
+        }).format(now);
+
+        let diaSemanaTexto = new Intl.DateTimeFormat('pt-BR', { 
+            timeZone, weekday: 'long' 
+        }).format(now);
+        
+        // Capitalizar primeira letra (segunda-feira -> Segunda-feira)
+        diaSemanaTexto = diaSemanaTexto.charAt(0).toUpperCase() + diaSemanaTexto.slice(1);
+
+        // 4. Lógica de Abertura Granatto
+        // Seg(1) a Sex(5): 09h as 18h
+        // Sáb(6): 09h as 13h
+        // Dom(0): Fechado
         
         let statusLoja = "FECHADO";
-        
-        if (data.day_of_week >= 1 && data.day_of_week <= 5) { // Seg a Sex
-            if (horaAtual >= 9 && horaAtual < 18) {
+
+        if (diaSemanaIndex >= 1 && diaSemanaIndex <= 5) { // Segunda a Sexta
+            if (horaBrasil >= 9 && horaBrasil < 18) {
                 statusLoja = "ABERTO";
             }
-        } else if (data.day_of_week === 6) { // Sábado
-            if (horaAtual >= 9 && horaAtual < 13) {
+        } else if (diaSemanaIndex === 6) { // Sábado
+            if (horaBrasil >= 9 && horaBrasil < 13) {
                 statusLoja = "ABERTO";
             }
         }
 
-        // 4. Retorno
+        // 5. Retorno
         res.status(200).json({
             data: dataFormatada,
             hora: horaFormatada,
-            dia_semana: diaSemanaNome,
+            dia_semana: diaSemanaTexto,
             status_comercial: statusLoja,
-            hora_servidor_debug: dataObj.getHours(), // Só para você ver a diferença se quiser
-            hora_brasil_debug: horaAtual,
+            hora_brasil_debug: horaBrasil, // Para você conferir se está pegando a hora certa (0-23)
             fuso: "America/Sao_Paulo"
         });
 
     } catch (error) {
         console.error(error);
-        res.status(500).json({ error: "Erro ao consultar a hora externa." });
+        // Mesmo se der erro catastrófico, retorna JSON válido para a IA não alucinar
+        res.status(200).json({ 
+            error: "Erro interno", 
+            status_comercial: "FECHADO", // Assume fechado por segurança
+            hora: "00:00" 
+        });
     }
 };
