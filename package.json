@@ -1,0 +1,9 @@
+{
+  "name": "api-granatto-horario",
+  "version": "1.0.0",
+  "description": "API de horario para agente IA",
+  "main": "api/index.js",
+  "dependencies": {
+    "axios": "^1.7.0"
+  }
+}
